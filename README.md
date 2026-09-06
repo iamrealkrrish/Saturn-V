@@ -26,10 +26,12 @@ STEP 1: Install Python
 Ensure Python (version 3.8 or higher) is installed on your system. 
 - Windows / macOS: Download from the official Python Downloads Page. (On Windows, make sure to check the box that says "Add Python to PATH").
 - Linux: Run the following command in your terminal:
-  sudo apt update && sudo apt install python3 python3-pip
+  sudo apt update && sudo apt install python python-pip
 
 Verify your installation by running:
+
 python --version
+
 pip --version
 
 
@@ -39,6 +41,7 @@ STEP 2: Clone the Project Repository
 Open your terminal and clone the repository to your local computer, then navigate into the project folder:
 
 git clone https://github.com/iamrealkrrish/saturn-v.git
+
 cd saturn-v
 
 (Alternatively, if you aren't using Git, create a new folder named "saturn-v" manually and place your "saturn.py" and "requirements.txt" files inside it).
@@ -60,6 +63,7 @@ python -m pip install -r requirements.txt
 STEP 4: Launch and Configure the Bot
 ------------------------------------------------------------------
 Run the script from your terminal:
+
 python saturn.py
 
 Follow the interactive configuration prompt to input your exchange settings, API keys, and strategy margins directly on the fly.
