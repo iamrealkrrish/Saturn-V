@@ -47,18 +47,20 @@ cd saturn-v
 ------------------------------------------------------------------
 STEP 3: Install Project Dependencies
 ------------------------------------------------------------------
-Create a file named `requirements.txt` and add:
-ccxt>=4.0.0
+install the required dependencies using pip:
 
-Then install the required dependencies using pip:
 pip install -r requirements.txt
+
+if pip didn't work then:
+
+python -m pip install -r requirements.txt
 
 
 ------------------------------------------------------------------
 STEP 4: Launch and Configure the Bot
 ------------------------------------------------------------------
 Run the script from your terminal:
-python main.py
+python saturn.py
 
 Follow the interactive configuration prompt to input your exchange settings, API keys, and strategy margins directly on the fly.
 
