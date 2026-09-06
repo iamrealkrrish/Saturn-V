@@ -1,5 +1,25 @@
-# Saturn-V 🚀 Complete Setup & Installation Guide
+# Saturn-V 🚀
 
+Your multi-stage launch vehicle for automated crypto spot trading. 
+
+---
+
+## Overview
+
+**Saturn-V** is a lightweight, interactive automated spot trading bot built with Python and CCXT. Designed for simplicity and control, it features an interactive terminal setup wizard that lets you configure your exchange, API credentials, trading pairs, and risk parameters on the fly without ever editing the source code.
+
+Whether you're executing small test hops in sandbox mode or aiming for escape velocity in live markets, Saturn-V handles continuous market monitoring, target profit-taking, strict stop-loss measures, and a smart DCA rebuy loop.
+
+---
+
+## Key Features
+
+* **Interactive Setup Wizard:** Configurable directly from your terminal upon launch with smart defaults.
+* **Multi-Exchange Support:** Plugs into any exchange supported by CCXT (e.g., Binance, KuCoin, Kraken, Coinbase).
+* **Paper / Live Trading Modes:** Test your strategies safely using exchange sandbox/paper trading modes before risking real capital.
+* **Advanced Risk Management:** Built-in target profit limits, hard stop-losses, and progressive cooldown DCA rebuys for dip accumulation.
+
+---
 ------------------------------------------------------------------
 STEP 1: Install Python
 ------------------------------------------------------------------
@@ -17,10 +37,11 @@ pip --version
 STEP 2: Clone the Project Repository
 ------------------------------------------------------------------
 Open your terminal and clone the repository to your local computer, then navigate into the project folder:
-git clone https://github.com/your-username/saturn-v.git
+
+git clone https://github.com/iamrealkrrish/saturn-v.git
 cd saturn-v
 
-(Alternatively, if you aren't using Git, create a new folder named "saturn-v" manually and place your "main.py" and "requirements.txt" files inside it).
+(Alternatively, if you aren't using Git, create a new folder named "saturn-v" manually and place your "saturn.py" and "requirements.txt" files inside it).
 
 
 ------------------------------------------------------------------
