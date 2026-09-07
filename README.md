@@ -26,16 +26,17 @@ STEP 1: Install Python
 Ensure Python (version 3.8 or higher) is installed on your system. 
 - Windows / macOS: Download from the official Python Downloads Page. (On Windows, make sure to check the box that says "Add Python to PATH").
 - Linux: Run the following command in your terminal:
+  
   ```sudo apt update && sudo apt install python python-pip
 
 Verify your installation by running:
 
-'''python --version
-'''pip --version
+```python --version
+   pip --version
 
 
 ------------------------------------------------------------------
-STEP 2: Clone the Project Repository
+## STEP 2: Clone the Project Repository
 ------------------------------------------------------------------
 Open your terminal and clone the repository to your local computer, then navigate into the project folder:
 
