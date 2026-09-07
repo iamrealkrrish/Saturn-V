@@ -1,9 +1,50 @@
+
 import time
+import json
+import os
 import ccxt
 from datetime import datetime
 
+CONFIG_FILE = "bot_config.json"
+
+def load_saved_config():
+    """Load configuration from local file if it exists."""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+def save_config(config):
+    """Save configuration to local file."""
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config, f, indent=4)
+    except Exception as e:
+        print(f"Notice: Could not save configuration file: {e}")
+
 def get_user_config():
-    """Interactive command-line setup menu."""
+    """Interactive command-line setup menu with persistent memory check."""
+    saved_config = load_saved_config()
+    
+    if saved_config:
+        print("=========================================")
+        print("       SATURN-V BOT CONFIGURATION        ")
+        print("=========================================")
+        print("Found an existing saved configuration:")
+        print(f" - Exchange: {saved_config.get('EXCHANGE_NAME')}")
+        print(f" - Symbol: {saved_config.get('SYMBOL')}")
+        print(f" - Paper Trading: {saved_config.get('IS_PAPER_TRADING')}")
+        print(f" - Trade Budget (USDT): {saved_config.get('SPEND_AMOUNT')}")
+        print("=========================================")
+        
+        choice = input("Do you want to use this saved configuration and API details? (y/n) [default: y]: ").strip().lower()
+        if choice != 'n':
+            print("Using saved configuration...\n")
+            return saved_config
+
     print("=========================================")
     print("       SATURN-V BOT CONFIGURATION        ")
     print("=========================================")
@@ -20,7 +61,8 @@ def get_user_config():
     
     print("\n--- Trading Strategy Settings ---")
     symbol = input("Trading Symbol [default: KCS/USDT]: ").strip().upper() or "KCS/USDT"
-    trade_amount = float(input("Trade Amount per order [default: 1.0]: ") or 1.0)
+    
+    spend_amount = float(input("Amount to spend per trade in USDT (Quote Currency) [default: 10.0]: ") or 10.0)
     
     profit_target = float(input("Profit Target % [default: 0.5]: ") or 0.5)
     rebuy_drop = float(input("Rebuy Drop % [default: 4.0]: ") or 4.0)
@@ -28,19 +70,22 @@ def get_user_config():
     
     print("=========================================\n")
     
-    return {
+    config = {
         "EXCHANGE_NAME": exchange_name,
         "IS_PAPER_TRADING": is_paper_trading,
         "API_KEY": api_key,
         "API_SECRET": api_secret,
         "API_PASSWORD": api_password,
         "SYMBOL": symbol,
-        "TRADE_AMOUNT": trade_amount,
+        "SPEND_AMOUNT": spend_amount,
         "PROFIT_TARGET_PERCENT": profit_target,
         "REBUY_DROP_PERCENT": rebuy_drop,
         "STOP_LOSS_PERCENT": stop_loss,
-        "CHECK_INTERVAL_SECONDS": 60
+        "CHECK_INTERVAL_SECONDS": 15
     }
+    
+    save_config(config)
+    return config
 
 def get_base_quote_currencies(symbol):
     """Safely extract base and quote currencies from symbol (e.g., KCS/USDT -> KCS, USDT)."""
@@ -48,17 +93,15 @@ def get_base_quote_currencies(symbol):
     return parts[0], parts[1]
 
 def run_bot(config):
-    # Unpack config
     EXCHANGE_NAME = config["EXCHANGE_NAME"]
     IS_PAPER_TRADING = config["IS_PAPER_TRADING"]
     SYMBOL = config["SYMBOL"]
-    TRADE_AMOUNT = config["TRADE_AMOUNT"]
+    SPEND_AMOUNT = config["SPEND_AMOUNT"]
     PROFIT_TARGET_PERCENT = config["PROFIT_TARGET_PERCENT"]
     REBUY_DROP_PERCENT = config["REBUY_DROP_PERCENT"]
     STOP_LOSS_PERCENT = config["STOP_LOSS_PERCENT"]
-    CHECK_INTERVAL_SECONDS = config["CHECK_INTERVAL_SECONDS"]
+    CHECK_INTERVAL_SECONDS = 15
 
-    # Dynamic Exchange Initialization via CCXT
     try:
         exchange_class = getattr(ccxt, EXCHANGE_NAME)
     except AttributeError:
@@ -78,13 +121,15 @@ def run_bot(config):
     exchange = exchange_class(exchange_config)
 
     if IS_PAPER_TRADING:
-        try:
-            exchange.set_sandbox_mode(True)
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] PAPER TRADING MODE ENABLED (Sandbox)")
-        except Exception as e:
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Notice: Sandbox mode not natively supported via CCXT for {EXCHANGE_NAME}: {e}")
+        if exchange.has.get('sandbox', False):
+            try:
+                exchange.set_sandbox_mode(True)
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] PAPER TRADING MODE ENABLED (Sandbox)")
+            except Exception as e:
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Notice: Failed to activate sandbox mode: {e}")
+        else:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] WARNING: {EXCHANGE_NAME.upper()} does NOT natively support Sandbox/Paper trading mode via CCXT.")
 
-    # State Variables
     entry_price = None
     rebuy_count = 0
     last_buy_time = 0
@@ -119,63 +164,84 @@ def run_bot(config):
             
             quote_balance, base_balance = get_balances()
             base_value_quote = base_balance * current_price
-            holding_base = base_balance > 0.01  
+            holding_base = base_balance * current_price > 1.0  
             
             action_logged = "HOLD"
             
-            # --- STRATEGY LOGIC ---
-            if quote_balance >= 1.0 and not holding_base and entry_price is None:
-                exchange.create_market_buy_order(SYMBOL, TRADE_AMOUNT)
-                entry_price = current_price
-                rebuy_count = 0
-                last_buy_time = current_time
-                action_logged = "INITIAL BUY"
-                print(f"[{timestamp_str}] [BUY] Executed Initial Buy at {current_price}. Entry Price set to {entry_price}")
+            calculated_trade_amount = SPEND_AMOUNT / current_price
+
+            if quote_balance >= SPEND_AMOUNT and not holding_base and entry_price is None:
+                try:
+                    exchange.create_market_buy_order(SYMBOL, calculated_trade_amount)
+                    entry_price = current_price
+                    rebuy_count = 0
+                    last_buy_time = current_time
+                    action_logged = "INITIAL BUY"
+                    print(f"[{timestamp_str}] [BUY] Spent ~{SPEND_AMOUNT} {quote_curr} to buy {calculated_trade_amount:.4f} {base_curr} at {current_price}.")
+                except ccxt.ExchangeError as ee:
+                    print(f"[{timestamp_str}] [ERROR] Exchange rejected order constraint: {ee}")
+                    print(f"[{timestamp_str}] [HALT] {EXCHANGE_NAME.upper()} requires a minimum order size or budget for {SYMBOL} greater than {SPEND_AMOUNT} {quote_curr}. Please increase your spend amount.")
+                    break
 
             elif holding_base and entry_price is not None and current_price >= (entry_price * (1 + PROFIT_TARGET_PERCENT / 100)):
                 if base_value_quote >= 1.0:
-                    exchange.create_market_sell_order(SYMBOL, base_balance)
-                    print(f"[{timestamp_str}] [SELL] Target +{PROFIT_TARGET_PERCENT}% hit. Sold at {current_price} (Entry was {entry_price})")
-                    entry_price = None
-                    rebuy_count = 0
-                    action_logged = "SELL (Profit)"
+                    try:
+                        exchange.create_market_sell_order(SYMBOL, base_balance)
+                        print(f"[{timestamp_str}] [SELL] Target +{PROFIT_TARGET_PERCENT}% hit. Sold at {current_price} (Entry was {entry_price})")
+                        entry_price = None
+                        rebuy_count = 0
+                        action_logged = "SELL (Profit)"
+                    except ccxt.ExchangeError as ee:
+                        print(f"[{timestamp_str}] [ERROR] Exchange rejected sell order: {ee}")
                 else:
                     action_logged = f"HOLD ({base_curr} value too low to sell)"
 
             elif holding_base and entry_price is not None and current_price <= (entry_price * (1 - STOP_LOSS_PERCENT / 100)):
                 if base_value_quote >= 1.0:
-                    exchange.create_market_sell_order(SYMBOL, base_balance)
-                    print(f"[{timestamp_str}] [STOP-LOSS] Drop -{STOP_LOSS_PERCENT}% hit. Emergency sell at {current_price} (Entry was {entry_price})")
-                    entry_price = None
-                    rebuy_count = 0
-                    action_logged = "SELL (Stop-Loss)"
+                    try:
+                        exchange.create_market_sell_order(SYMBOL, base_balance)
+                        print(f"[{timestamp_str}] [STOP-LOSS] Drop -{STOP_LOSS_PERCENT}% hit. Emergency sell at {current_price} (Entry was {entry_price})")
+                        entry_price = None
+                        rebuy_count = 0
+                        action_logged = "SELL (Stop-Loss)"
+                    except ccxt.ExchangeError as ee:
+                        print(f"[{timestamp_str}] [ERROR] Exchange rejected stop-loss order: {ee}")
                 else:
                     action_logged = "HOLD (Stop-loss hit, but asset value too low to sell)"
 
             elif holding_base and entry_price is not None and current_price <= (entry_price * (1 - REBUY_DROP_PERCENT / 100)):
-                if quote_balance >= 1.0:
+                if quote_balance >= SPEND_AMOUNT:
                     if rebuy_count == 0:
-                        exchange.create_market_buy_order(SYMBOL, TRADE_AMOUNT)
-                        entry_price = current_price
-                        rebuy_count = 1
-                        last_buy_time = current_time
-                        action_logged = "REBUY (1st)"
-                        print(f"[{timestamp_str}] [REBUY 1] Drop -{REBUY_DROP_PERCENT}% hit. Bought at {current_price}")
+                        try:
+                            exchange.create_market_buy_order(SYMBOL, calculated_trade_amount)
+                            entry_price = current_price
+                            rebuy_count = 1
+                            last_buy_time = current_time
+                            action_logged = "REBUY (1st)"
+                            print(f"[{timestamp_str}] [REBUY 1] Drop -{REBUY_DROP_PERCENT}% hit. Spent ~{SPEND_AMOUNT} {quote_curr} at {current_price}")
+                        except ccxt.ExchangeError as ee:
+                            print(f"[{timestamp_str}] [ERROR] Exchange rejected rebuy order constraint: {ee}")
+                            print(f"[{timestamp_str}] [HALT] Check minimum limits or required funds for {SYMBOL} on {EXCHANGE_NAME.upper()}.")
+                            break
                     else:
                         cooldown = rebuy_count * 7 * 60  
                         time_elapsed = current_time - last_buy_time
                         
                         if time_elapsed >= cooldown:
-                            exchange.create_market_buy_order(SYMBOL, TRADE_AMOUNT)
-                            entry_price = current_price
-                            rebuy_count += 1
-                            last_buy_time = current_time
-                            action_logged = f"REBUY ({rebuy_count}th)"
-                            print(f"[{timestamp_str}] [REBUY {rebuy_count}] Cooldown passed ({int(time_elapsed)}s). Bought at {current_price}")
+                            try:
+                                exchange.create_market_buy_order(SYMBOL, calculated_trade_amount)
+                                entry_price = current_price
+                                rebuy_count += 1
+                                last_buy_time = current_time
+                                action_logged = f"REBUY ({rebuy_count}th)"
+                                print(f"[{timestamp_str}] [REBUY {rebuy_count}] Cooldown passed ({int(time_elapsed)}s). Spent ~{SPEND_AMOUNT} {quote_curr} at {current_price}")
+                            except ccxt.ExchangeError as ee:
+                                print(f"[{timestamp_str}] [ERROR] Exchange rejected progressive rebuy order: {ee}")
+                                break
                         else:
                             action_logged = f"HOLD (Rebuy cooldown active: {int(cooldown - time_elapsed)}s remaining)"
                 else:
-                    action_logged = f"HOLD (Insufficient {quote_curr} balance for rebuy)"
+                    action_logged = f"HOLD (Available {quote_curr} is below allocated spend amount of {SPEND_AMOUNT})"
 
             else:
                 action_logged = "HOLD"
