@@ -31,10 +31,10 @@ Ensure Python (version 3.8 or higher) is installed on your system.
   sudo apt update && sudo apt install python python-pip
 
 Verify your installation by running:
-
+```
 python --version
 pip --version
-
+```         
 
 ------------------------------------------------------------------
 ## STEP 2: Clone the Project Repository
